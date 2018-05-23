@@ -3,7 +3,7 @@ import pickle
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 import keras.backend as K
-from keras.layers import LSTM, Input, Dot, Softmax, Multiply, Concatenate, Subtract, Dense, Lambda, Embedding
+from keras.layers import LSTM, Input, Dot, Softmax, Multiply, Concatenate, Subtract, Dense, Lambda, Embedding, Dropout
 from keras.layers.wrappers import Bidirectional
 from keras.models import Model, load_model
 from os.path import isfile
@@ -32,11 +32,6 @@ def load_embeddings():
 
 embedding_layer = load_embeddings()
 
-def expand_rep(x, r, a):
-    y = K.expand_dims(x, axis=a)
-    y = K.repeat_elements(y, r, axis=a)
-    return y
-
 bilstm1 = Bidirectional(LSTM(300, return_sequences=True))
 bilstm2 = Bidirectional(LSTM(300, return_sequences=True))
 
@@ -52,13 +47,13 @@ x2 = bilstm1(x2)
 e = Dot(axes=2)([x1, x2])
 e1 = Softmax(axis=2)(e)
 e2 = Softmax(axis=1)(e)
-e1 = Lambda(expand_rep, arguments={'r' : 2 * WordVecLen, 'a' : 3})(e1)
-e2 = Lambda(expand_rep, arguments={'r' : 2 * WordVecLen, 'a' : 3})(e2)
+e1 = Lambda(K.expand_dims, arguments={'axis' : 3})(e1)
+e2 = Lambda(K.expand_dims, arguments={'axis' : 3})(e2)
 
-_x1 = Lambda(expand_rep, arguments={'r' : K.int_shape(x1)[1], 'a' : 1})(x2)
+_x1 = Lambda(K.expand_dims, arguments={'axis' : 1})(x2)
 _x1 = Multiply()([e1, _x1])
 _x1 = Lambda(K.sum, arguments={'axis' : 2})(_x1)
-_x2 = Lambda(expand_rep, arguments={'r' : K.int_shape(x2)[1], 'a' : 2})(x1)
+_x2 = Lambda(K.expand_dims, arguments={'axis' : 2})(x1)
 _x2 = Multiply()([e2, _x2])
 _x2 = Lambda(K.sum, arguments={'axis' : 1})(_x2)
 
@@ -75,6 +70,9 @@ av2 = Lambda(K.mean, arguments={'axis' : 1})(y2)
 
 y = Concatenate()([av1, mx1, av2, mx2])
 y = Dense(1024, activation='tanh')(y)
+y = Dropout(0.5)(y)
+y = Dense(1024, activation='tanh')(y)
+y = Dropout(0.5)(y)
 y = Dense(3, activation='softmax')(y)
 
 model = Model(inputs=[i1, i2], outputs=y)
